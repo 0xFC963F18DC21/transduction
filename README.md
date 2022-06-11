@@ -24,7 +24,7 @@ A reducer has three effective signatures:
   `stepR: A => R => R`)
 
 A transducer adds a layer of transformation onto these reducers, and can be both
-stateful or stateless.
+stateful or stateless. They are also composeable using simple function composition.
 
 This library aims to provide interfaces for creating immutable and mutable state
 transducers and the ability to use them.
