@@ -151,4 +151,54 @@ object Transducer {
     *   A string conversion transducer.
     */
   def ToStringTransducer[S, A]: Transducer[S, S, String, A] = MappingTransducer(_.toString)
+
+  /** Debug transducer. Adds in debug prints to a transducer.
+    * @param name
+    *   Prefix of printed message.
+    * @tparam S
+    *   Type of state used by reducer.
+    * @tparam A
+    *   Type of input taken by reducer.
+    * @return
+    *   A debugging transducer that shows messages with the given prefix.
+    */
+  def DebugTransducer[S, A](name: String = "DEBUG"): Transducer[S, S, A, A] =
+    new Transducer[S, S, A, A] {
+      override def apply[R](rf: Reducer[S, A, R]): Reducer[S, A, R] = new Reducer[S, A, R] {
+        override def state(): S = {
+          val state = rf.state()
+
+          printf("%s - CURRENT STATE: %s%n", name, state)
+          state
+        }
+
+        override def identity(): R = {
+          val ident = rf.identity()
+
+          printf("%s - IDENTITY: %s%n", name, ident)
+          ident
+        }
+
+        override def completion(state: S, acc: R): R = {
+          val result = rf.completion(state, acc)
+
+          printf("%s - COMPLETION: %s, %s => %s%n", name, state, acc, result)
+          result
+        }
+
+        override def stepL(state: S, acc: => R, inp: A): (S, Reduction[R]) = {
+          val result = rf.stepL(state, acc, inp)
+
+          printf("%s - STEP-LEFT: %s, %s, %s => %s%n", name, state, acc, inp, result)
+          result
+        }
+
+        override def stepR(state: S, inp: A, acc: => R): (S, Reduction[R]) = {
+          val result = rf.stepR(state, inp, acc)
+
+          printf("%s - STEP-RIGHT: %s, %s, %s => %s%n", name, state, inp, acc, result)
+          result
+        }
+      }
+    }
 }
