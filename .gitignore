@@ -1,0 +1,19 @@
+# Ignore Java build files.
+*.class
+*.jar
+
+# Ignore other junk files.
+*~
+/target/*
+/project/target/*
+/project/project/*
+
+# Ignore IDE or plugin stuff.
+/.metals/*
+/.idea/*
+*.iml
+/.bsp/*
+/.bloop/*
+/project/metals.sbt
+/project/.bloop/*
+/.vscode/*
