@@ -32,3 +32,123 @@ trait Transducer[S1, S2, I1, I2] {
     */
   def apply[R](rf: Reducer[S1, I1, R]): Reducer[S2, I2, R]
 }
+
+object Transducer {
+  /** Identity transducer. Does not transform a reducer.
+    * @tparam S
+    *   Type of state used by reducer.
+    * @tparam I
+    *   Type of input used by reducer.
+    */
+  case class IdentityTransducer[S, I]() extends Transducer[S, S, I, I] {
+    override def apply[R](rf: Reducer[S, I, R]): Reducer[S, I, R] = rf
+  }
+
+  /** Mapping transducer. Maps the input using a function before reducing.
+    * @param f
+    *   Mapping function.
+    * @tparam S
+    *   Type of state used by reducer.
+    * @tparam A
+    *   Type of input taken by the mapping function.
+    * @tparam B
+    *   Type of input taken by reducer.
+    */
+  case class MappingTransducer[S, A, B](f: A => B) extends Transducer[S, S, B, A] {
+    override def apply[R](rf: Reducer[S, B, R]): Reducer[S, A, R] = new Reducer[S, A, R] {
+      override def state(): S = rf.state()
+
+      override def identity(): R = rf.identity()
+
+      override def completion(state: S, acc: R): R = rf.completion(state, acc)
+
+      override def stepL(state: S, acc: => R, inp: A): (S, Reduction[R]) =
+        rf.stepL(state, acc, f(inp))
+
+      override def stepR(state: S, inp: A, acc: => R): (S, Reduction[R]) =
+        rf.stepR(state, f(inp), acc)
+    }
+  }
+
+  /** Take transducer. Only accepts the first n items for reduction.
+    * @param n
+    *   Number of items to accept. Must be >= 0.
+    * @tparam S
+    *   Type of state used by reducer.
+    * @tparam A
+    *   Type of input taken by reducer.
+    */
+  case class TakeTransducer[S, A](n: Int) extends Transducer[S, (Int, S), A, A] {
+    override def apply[R](rf: Reducer[S, A, R]): Reducer[(Int, S), A, R] =
+      new Reducer[(Int, S), A, R] {
+        override def state(): (Int, S) = (n, rf.state())
+
+        override def identity(): R = rf.identity()
+
+        override def completion(state: (Int, S), acc: R): R = rf.completion(state._2, acc)
+
+        override def stepL(state: (Int, S), acc: => R, inp: A): ((Int, S), Reduction[R]) =
+          step(state, acc)(s => rf.stepL(s, acc, inp))
+
+        override def stepR(state: (Int, S), inp: A, acc: => R): ((Int, S), Reduction[R]) =
+          step(state, acc)(s => rf.stepR(s, inp, acc))
+
+        private def step(state: (Int, S), acc: => R)(
+          resLmb: S => (S, Reduction[R])
+        ): ((Int, S), Reduction[R]) =
+          state match {
+            case (x, s) if x > 0 =>
+              resLmb(s) match {
+                case (ns, na) => ((x - 1, ns), na)
+              }
+            case _               => (state, Reduced(acc))
+          }
+      }
+  }
+
+  /** Drop transducer. Only accepts items after the first n items for reduction.
+    * @param n
+    *   Number of items to reject. Must be >= 0.
+    * @tparam S
+    *   Type of state used by reducer.
+    * @tparam A
+    *   Type of input taken by reducer.
+    */
+  case class DropTransducer[S, A](n: Int) extends Transducer[S, (Int, S), A, A] {
+    override def apply[R](rf: Reducer[S, A, R]): Reducer[(Int, S), A, R] =
+      new Reducer[(Int, S), A, R] {
+        override def state(): (Int, S) = (n, rf.state())
+
+        override def identity(): R = rf.identity()
+
+        override def completion(state: (Int, S), acc: R): R = rf.completion(state._2, acc)
+
+        override def stepL(state: (Int, S), acc: => R, inp: A): ((Int, S), Reduction[R]) =
+          step(state, acc)(s => rf.stepL(s, acc, inp))
+
+        override def stepR(state: (Int, S), inp: A, acc: => R): ((Int, S), Reduction[R]) =
+          step(state, acc)(s => rf.stepR(s, inp, acc))
+
+        private def step(state: (Int, S), acc: => R)(
+          resLmb: S => (S, Reduction[R])
+        ): ((Int, S), Reduction[R]) =
+          state match {
+            case (x, s) if x <= 0 =>
+              resLmb(s) match {
+                case (ns, na) => ((x, ns), na)
+              }
+            case (x, s)           => ((x - 1, s), Reduced(acc))
+          }
+      }
+  }
+
+  /** To-String transducer. Maps everything into a string.
+    * @tparam S
+    *   Type of state used by reducer.
+    * @tparam A
+    *   Type of input taken by reducer.
+    * @return
+    *   A string conversion transducer.
+    */
+  def ToStringTransducer[S, A]: Transducer[S, S, String, A] = MappingTransducer(_.toString)
+}
