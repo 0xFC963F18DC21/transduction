@@ -22,11 +22,11 @@ package net.nergi.transduction
   *   Type of the final result being produced by this reducer.
   */
 trait Reducer[S, -A, R] {
-  /** Get the current immutable state that this reducer is in.
+  /** Get the initial immutable state for this reducer.
     * @return
-    *   Reducer's current state.
+    *   Reducer's initial state.
     */
-  def state(): S
+  def initialState(): S
 
   /** Get this reducer's initial or identity value if defined. Override to define an initial value.
     *
@@ -102,7 +102,7 @@ object Reducer {
     sR: (A, R) => Reduction[R]
   ): Reducer[Unit, A, R] =
     new Reducer[Unit, A, R] {
-      override def state(): Unit = ()
+      override def initialState(): Unit = ()
 
       override def identity(): R = id
 
@@ -127,23 +127,34 @@ object Reducer {
 
   // Simple boolean reducers.
   /** Boolean-and reducer. */
-  def AndReducer(comp: Boolean => Boolean = identity _): Reducer[Unit, Boolean, Boolean] =
+  def AndReducer(comp: Boolean => Boolean = identity): Reducer[Unit, Boolean, Boolean] =
     statelessR(true, comp, (a, r) => if (!a) Reduced(false) else Continue(a && r))
 
   /** Boolean-or reducer. */
-  def OrReducer(comp: Boolean => Boolean = identity _): Reducer[Unit, Boolean, Boolean] =
+  def OrReducer(comp: Boolean => Boolean = identity): Reducer[Unit, Boolean, Boolean] =
     statelessR(false, comp, (a, r) => if (a) Reduced(true) else Continue(a || r))
 
   /** Boolean-exclusive-or reducer. */
-  def XorReducer(comp: Boolean => Boolean = identity _): Reducer[Unit, Boolean, Boolean] =
+  def XorReducer(comp: Boolean => Boolean = identity): Reducer[Unit, Boolean, Boolean] =
     statelessR(false, comp, (a, r) => Continue(a ^ r))
 
   // Simple arithmetic reducers.
   /** Plus / Add reducer. */
-  def AddReducer[T](comp: T => T = identity _)(implicit ev: Numeric[T]): Reducer[Unit, T, T] =
+  def AddReducer[@specialized T](comp: T => T = identity _)(implicit
+    ev: Numeric[T]
+  ): Reducer[Unit, T, T] =
     stateless(ev.zero, comp, (r, a) => Continue(ev.plus(r, a)), (a, r) => Continue(ev.plus(a, r)))
 
   /** Multiply / Times reducer. */
-  def MuliplyReducer[T](comp: T => T = identity _)(implicit ev: Numeric[T]): Reducer[Unit, T, T] =
+  def MuliplyReducer[@specialized T](comp: T => T = identity _)(implicit
+    ev: Numeric[T]
+  ): Reducer[Unit, T, T] =
     stateless(ev.one, comp, (r, a) => Continue(ev.times(r, a)), (a, r) => Continue(ev.times(a, r)))
+
+  // Other reducers.
+  /** List-combining reducer. */
+  def ListAppendReducer[T](
+    comp: List[T] => List[T] = identity[List[T]] _
+  ): Reducer[Unit, List[T], List[T]] =
+    statelessR(Nil, comp, (a, r) => Continue(a ::: r))
 }

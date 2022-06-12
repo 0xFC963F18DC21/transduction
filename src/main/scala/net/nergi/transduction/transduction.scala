@@ -24,7 +24,7 @@ package object transduction {
     *   The final state and reduction result of the item.
     */
   @tailrec
-  private def reduceLeft[S, A, R](
+  private[this] def reduceLeft[S, A, R](
     red: Reducer[S, A, R],
     state: S,
     init: R,
@@ -69,7 +69,7 @@ package object transduction {
     coll: Iterable[I2]
   ): R = {
     val xformed = xform(red)
-    reduceLeft[S2, I2, R](xformed, xformed.state(), init, coll) match {
+    reduceLeft[S2, I2, R](xformed, xformed.initialState(), init, coll) match {
       case (state, res) => xformed.completion(state, res)
     }
   }
@@ -121,7 +121,7 @@ package object transduction {
     * @return
     *   The new state and next intermediate item of the reduction.
     */
-  private def reduceRight[S, A, R](
+  private[this] def reduceRight[S, A, R](
     red: Reducer[S, A, R],
     state: S,
     init: R,
@@ -166,7 +166,7 @@ package object transduction {
     coll: Iterable[I2]
   ): R = {
     val xformed = xform(red)
-    reduceRight[S2, I2, R](xformed, xformed.state(), init, coll) match {
+    reduceRight[S2, I2, R](xformed, xformed.initialState(), init, coll) match {
       case (state, res) => xformed.completion(state, res.item)
     }
   }

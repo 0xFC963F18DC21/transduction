@@ -56,7 +56,7 @@ object Transducer {
     */
   case class MappingTransducer[S, A, B](f: A => B) extends Transducer[S, S, B, A] {
     override def apply[R](rf: Reducer[S, B, R]): Reducer[S, A, R] = new Reducer[S, A, R] {
-      override def state(): S = rf.state()
+      override def initialState(): S = rf.initialState()
 
       override def identity(): R = rf.identity()
 
@@ -81,7 +81,7 @@ object Transducer {
   case class TakeTransducer[S, A](n: Int) extends Transducer[S, (Int, S), A, A] {
     override def apply[R](rf: Reducer[S, A, R]): Reducer[(Int, S), A, R] =
       new Reducer[(Int, S), A, R] {
-        override def state(): (Int, S) = (n, rf.state())
+        override def initialState(): (Int, S) = (n, rf.initialState())
 
         override def identity(): R = rf.identity()
 
@@ -106,6 +106,36 @@ object Transducer {
       }
   }
 
+  /** Take-while transducer. Only accepts inputs until the first input that does not match the given
+    * predicate function.
+    *
+    * Ideally, the predicate is pure.
+    * @param p
+    *   Predicate function for deciding what inputs go in.
+    * @tparam S
+    *   Type of state used by reducer.
+    * @tparam A
+    *   Type of input taken by reducer.
+    */
+  case class TakeWhileTransducer[S, A](p: A => Boolean) extends Transducer[S, S, A, A] {
+    override def apply[R](rf: Reducer[S, A, R]): Reducer[S, A, R] =
+      new Reducer[S, A, R] {
+        override def initialState(): S = rf.initialState()
+
+        override def identity(): R = rf.identity()
+
+        override def completion(state: S, acc: R): R = rf.completion(state, acc)
+
+        override def stepL(state: S, acc: => R, inp: A): (S, Reduction[R]) =
+          if (!p(inp)) (state, Reduced(acc))
+          else rf.stepL(state, acc, inp)
+
+        override def stepR(state: S, inp: A, acc: => R): (S, Reduction[R]) =
+          if (!p(inp)) (state, Reduced(acc))
+          else rf.stepR(state, inp, acc)
+      }
+  }
+
   /** Drop transducer. Only accepts items after the first n items for reduction.
     * @param n
     *   Number of items to reject. Must be >= 0.
@@ -117,7 +147,7 @@ object Transducer {
   case class DropTransducer[S, A](n: Int) extends Transducer[S, (Int, S), A, A] {
     override def apply[R](rf: Reducer[S, A, R]): Reducer[(Int, S), A, R] =
       new Reducer[(Int, S), A, R] {
-        override def state(): (Int, S) = (n, rf.state())
+        override def initialState(): (Int, S) = (n, rf.initialState())
 
         override def identity(): R = rf.identity()
 
@@ -137,8 +167,76 @@ object Transducer {
               resLmb(s) match {
                 case (ns, na) => ((x, ns), na)
               }
-            case (x, s)           => ((x - 1, s), Reduced(acc))
+            case (x, s)           => ((x - 1, s), Continue(acc))
           }
+      }
+  }
+
+  /** Drop-while transducer. Does not accept inputs until the first input that does not match the
+    * given predicate function.
+    *
+    * Ideally, the predicate is pure.
+    * @param p
+    *   Predicate function for deciding what inputs do not go in.
+    * @tparam S
+    *   Type of state used by reducer.
+    * @tparam A
+    *   Type of input taken by reducer.
+    */
+  case class DropWhileTransducer[S, A](p: A => Boolean) extends Transducer[S, (Boolean, S), A, A] {
+    override def apply[R](rf: Reducer[S, A, R]): Reducer[(Boolean, S), A, R] =
+      new Reducer[(Boolean, S), A, R] {
+        override def initialState(): (Boolean, S) = (true, rf.initialState())
+
+        override def identity(): R = rf.identity()
+
+        override def completion(state: (Boolean, S), acc: R): R = rf.completion(state._2, acc)
+
+        override def stepL(state: (Boolean, S), acc: => R, inp: A): ((Boolean, S), Reduction[R]) =
+          if (state._1 && p(inp)) (state, Continue(acc))
+          else
+            rf.stepL(state._2, acc, inp) match {
+              case (ns, na) => ((false, ns), na)
+            }
+
+        override def stepR(state: (Boolean, S), inp: A, acc: => R): ((Boolean, S), Reduction[R]) =
+          if (state._1 && p(inp)) (state, Continue(acc))
+          else
+            rf.stepR(state._2, inp, acc) match {
+              case (ns, na) => ((false, ns), na)
+            }
+      }
+  }
+
+  /** Dedupe transducer. Removes all duplicate inputs from the reduction process. It will always
+    * leave one of a duplicate set of inputs.
+    * @tparam S
+    *   Type of state used by reducer.
+    * @tparam A
+    *   Type of input taken by reducer.
+    */
+  case class DedupeTransducer[S, A]() extends Transducer[S, (Set[A], S), A, A] {
+    override def apply[R](rf: Reducer[S, A, R]): Reducer[(Set[A], S), A, R] =
+      new Reducer[(Set[A], S), A, R] {
+        override def initialState(): (Set[A], S) = (Set.empty, rf.initialState())
+
+        override def identity(): R = rf.identity()
+
+        override def completion(state: (Set[A], S), acc: R): R = rf.completion(state._2, acc)
+
+        override def stepL(state: (Set[A], S), acc: => R, inp: A): ((Set[A], S), Reduction[R]) =
+          if (!state._1.contains(inp)) (state, Continue(acc))
+          else
+            rf.stepL(state._2, acc, inp) match {
+              case (ns, na) => ((state._1 + inp, ns), na)
+            }
+
+        override def stepR(state: (Set[A], S), inp: A, acc: => R): ((Set[A], S), Reduction[R]) =
+          if (!state._1.contains(inp)) (state, Continue(acc))
+          else
+            rf.stepR(state._2, inp, acc) match {
+              case (ns, na) => ((state._1 + inp, ns), na)
+            }
       }
   }
 
@@ -150,7 +248,7 @@ object Transducer {
     * @return
     *   A string conversion transducer.
     */
-  def ToStringTransducer[S, A]: Transducer[S, S, String, A] = MappingTransducer(_.toString)
+  def ToStringTransducer[S, A](): Transducer[S, S, String, A] = MappingTransducer(_.toString)
 
   /** Debug transducer. Adds in debug prints to a transducer.
     * @param name
@@ -162,43 +260,42 @@ object Transducer {
     * @return
     *   A debugging transducer that shows messages with the given prefix.
     */
-  def DebugTransducer[S, A](name: String = "DEBUG"): Transducer[S, S, A, A] =
-    new Transducer[S, S, A, A] {
-      override def apply[R](rf: Reducer[S, A, R]): Reducer[S, A, R] = new Reducer[S, A, R] {
-        override def state(): S = {
-          val state = rf.state()
+  case class DebugTransducer[S, A](name: String = "DEBUG") extends Transducer[S, S, A, A] {
+    override def apply[R](rf: Reducer[S, A, R]): Reducer[S, A, R] = new Reducer[S, A, R] {
+      override def initialState(): S = {
+        val state = rf.initialState()
 
-          printf("%s - CURRENT STATE: %s%n", name, state)
-          state
-        }
+        printf("%s - CURRENT STATE: %s%n", name, state)
+        state
+      }
 
-        override def identity(): R = {
-          val ident = rf.identity()
+      override def identity(): R = {
+        val ident = rf.identity()
 
-          printf("%s - IDENTITY: %s%n", name, ident)
-          ident
-        }
+        printf("%s - IDENTITY: %s%n", name, ident)
+        ident
+      }
 
-        override def completion(state: S, acc: R): R = {
-          val result = rf.completion(state, acc)
+      override def completion(state: S, acc: R): R = {
+        val result = rf.completion(state, acc)
 
-          printf("%s - COMPLETION: %s, %s => %s%n", name, state, acc, result)
-          result
-        }
+        printf("%s - COMPLETION: %s, %s => %s%n", name, state, acc, result)
+        result
+      }
 
-        override def stepL(state: S, acc: => R, inp: A): (S, Reduction[R]) = {
-          val result = rf.stepL(state, acc, inp)
+      override def stepL(state: S, acc: => R, inp: A): (S, Reduction[R]) = {
+        val result = rf.stepL(state, acc, inp)
 
-          printf("%s - STEP-LEFT: %s, %s, %s => %s%n", name, state, acc, inp, result)
-          result
-        }
+        printf("%s - STEP-LEFT: %s, %s, %s => %s%n", name, state, acc, inp, result)
+        result
+      }
 
-        override def stepR(state: S, inp: A, acc: => R): (S, Reduction[R]) = {
-          val result = rf.stepR(state, inp, acc)
+      override def stepR(state: S, inp: A, acc: => R): (S, Reduction[R]) = {
+        val result = rf.stepR(state, inp, acc)
 
-          printf("%s - STEP-RIGHT: %s, %s, %s => %s%n", name, state, inp, acc, result)
-          result
-        }
+        printf("%s - STEP-RIGHT: %s, %s, %s => %s%n", name, state, inp, acc, result)
+        result
       }
     }
+  }
 }
