@@ -24,7 +24,7 @@ package object transduction {
     *   The final state and reduction result of the item.
     */
   @tailrec
-  private[this] def reduceLeft[S, A, R](
+  private[transduction] def reduceLeft[S, A, R](
     red: Reducer[S, A, R],
     state: S,
     init: R,
@@ -121,7 +121,7 @@ package object transduction {
     * @return
     *   The new state and next intermediate item of the reduction.
     */
-  private[this] def reduceRight[S, A, R](
+  private[transduction] def reduceRight[S, A, R](
     red: Reducer[S, A, R],
     state: S,
     init: R,

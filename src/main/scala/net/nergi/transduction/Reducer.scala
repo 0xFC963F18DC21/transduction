@@ -157,4 +157,10 @@ object Reducer {
     comp: List[T] => List[T] = identity[List[T]] _
   ): Reducer[Unit, List[T], List[T]] =
     statelessR(Nil, comp, (a, r) => Continue(a ::: r))
+
+  /** List-cons reducer. */
+  def ListConsReducer[T](
+    comp: List[T] => List[T] = identity[List[T]] _
+  ): Reducer[Unit, T, List[T]] =
+    statelessR(Nil, comp, (a, r) => Continue(a :: r))
 }

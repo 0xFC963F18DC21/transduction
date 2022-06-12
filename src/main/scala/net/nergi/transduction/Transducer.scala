@@ -1,5 +1,7 @@
 package net.nergi.transduction
 
+import scala.collection.immutable.ListMap
+
 /** A transducer transforms reducers into other reducers. These may be stateless or stateful.
   *
   * If creating a mutable transducer or stateless transducer, simply pass the old state type on.
@@ -11,6 +13,7 @@ package net.nergi.transduction
   *   - The new completion must call the old reducer's completion exactly once.
   *   - The new step functions can call the old reducer's step as many (or as few) times as it
   *     wants.
+  *
   * @tparam S1
   *   Old reducer's state type.
   * @tparam S2
@@ -31,9 +34,49 @@ trait Transducer[S1, S2, +I1, -I2] {
     *   Transformed reduction.
     */
   def apply[R](rf: Reducer[S1, I1, R]): Reducer[S2, I2, R]
+
+  /** Composition operator for transducers.
+    * @param xf
+    *   Transducer to compose with.
+    * @tparam S3
+    *   State type of next transducer.
+    * @tparam I3
+    *   Input type of next transducer.
+    * @return
+    *   Composed transducer.
+    */
+  def <-:[S3, I3](xf: Transducer[S2, S3, I2, I3]): Transducer[S1, S3, I1, I3] = {
+    val old = this
+    new Transducer[S1, S3, I1, I3] {
+      override def apply[R](rf: Reducer[S1, I1, R]): Reducer[S3, I3, R] = xf(old(rf))
+    }
+  }
+
+  /** Alias for [[<-:]]. */
+  def compose[S3, I3](xf: Transducer[S2, S3, I2, I3]): Transducer[S1, S3, I1, I3] = xf <-: this
+
+  /** And-Then operator for transducers.
+    * @param xf
+    *   Transducer to execute next.
+    * @tparam S3
+    *   State type of next transducer.
+    * @tparam I3
+    *   Input type of next transducer.
+    * @return
+    *   Composed transducer.
+    */
+  def :->[S3, I3](xf: Transducer[S2, S3, I2, I3]): Transducer[S1, S3, I1, I3] = xf <-: this
+
+  /** Alias for [[:->]]. */
+  def andThen[S3, I3](xf: Transducer[S2, S3, I2, I3]): Transducer[S1, S3, I1, I3] = this :-> xf
 }
 
 object Transducer {
+  /** Direction-biased transducers need a parameter to decide their bias. */
+  sealed trait Bias
+  case object BiasL extends Bias
+  case object BiasR extends Bias
+
   /** Identity transducer. Does not transform a reducer.
     * @tparam S
     *   Type of state used by reducer.
@@ -68,6 +111,33 @@ object Transducer {
       override def stepR(state: S, inp: A, acc: => R): (S, Reduction[R]) =
         rf.stepR(state, f(inp), acc)
     }
+  }
+
+  /** Filtering transducer. Only accepts inputs which match the predicate.
+    * @param p
+    *   Predicate used to filter inputs.
+    * @tparam S
+    *   Type of state used by reducer.
+    * @tparam A
+    *   Type of input used by reducer.
+    */
+  case class FilteringTransducer[S, A](p: A => Boolean) extends Transducer[S, S, A, A] {
+    override def apply[R](rf: Reducer[S, A, R]): Reducer[S, A, R] =
+      new Reducer[S, A, R] {
+        override def initialState(): S = rf.initialState()
+
+        override def identity(): R = rf.identity()
+
+        override def completion(state: S, acc: R): R = rf.completion(state, acc)
+
+        override def stepL(state: S, acc: => R, inp: A): (S, Reduction[R]) =
+          if (p(inp)) rf.stepL(state, acc, inp)
+          else (state, Continue(acc))
+
+        override def stepR(state: S, inp: A, acc: => R): (S, Reduction[R]) =
+          if (p(inp)) rf.stepR(state, inp, acc)
+          else (state, Continue(acc))
+      }
   }
 
   /** Take transducer. Only accepts the first n items for reduction.
@@ -237,6 +307,58 @@ object Transducer {
             rf.stepR(state._2, inp, acc) match {
               case (ns, na) => ((state._1 + inp, ns), na)
             }
+      }
+  }
+
+  /** Categorising transducer. Categorises all items into sublists where the categoriser function
+    * returns the same value. Value order from iterable is preserved in each sublist.
+    * @param categoriser
+    *   Key / category generator.
+    * @param bias
+    *   Which direction to bias the final reduction.
+    * @tparam S
+    *   Type of state used by reducer.
+    * @tparam K
+    *   Type of keys / categories used internally.
+    * @tparam A
+    *   Type of input taken by reducer.
+    */
+  case class CategorisingTransducer[S, K, A](categoriser: A => K, bias: Bias = BiasL)
+    extends Transducer[S, (Map[K, List[A]], S), List[A], A] {
+    override def apply[R](rf: Reducer[S, List[A], R]): Reducer[(Map[K, List[A]], S), A, R] =
+      new Reducer[(Map[K, List[A]], S), A, R] {
+        override def initialState(): (Map[K, List[A]], S) = (ListMap.empty, rf.initialState())
+
+        override def identity(): R = rf.identity()
+
+        override def completion(state: (Map[K, List[A]], S), acc: R): R = {
+          val lists = state._1.map { case (_, l) => l.reverse }.toList
+
+          bias match {
+            case BiasL =>
+              reduceLeft[S, List[A], R](rf, rf.initialState(), rf.identity(), lists)._2
+            case BiasR =>
+              reduceRight[S, List[A], R](rf, rf.initialState(), rf.identity(), lists)._2.item
+          }
+        }
+
+        override def stepL(
+          state: (Map[K, List[A]], S),
+          acc: => R,
+          inp: A
+        ): ((Map[K, List[A]], S), Reduction[R]) = state match {
+          case (m, s) =>
+            (
+              (
+                m.updatedWith(categoriser(inp)) {
+                  case None    => Some(List(inp))
+                  case Some(l) => Some(inp :: l)
+                },
+                s
+              ),
+              Continue(acc)
+            )
+        }
       }
   }
 
