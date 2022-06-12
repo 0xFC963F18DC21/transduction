@@ -20,7 +20,7 @@ package net.nergi.transduction
   * @tparam I2
   *   New reducer's input type.
   */
-trait Transducer[S1, S2, I1, I2] {
+trait Transducer[S1, S2, +I1, -I2] {
   /** Transform a reducer using this transducer. Compose several transducers' apply methods to
     * compose transducers.
     * @param rf

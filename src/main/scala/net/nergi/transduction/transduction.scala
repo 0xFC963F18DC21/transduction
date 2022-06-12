@@ -100,7 +100,7 @@ package object transduction {
     coll: Iterable[I2]
   ): R = {
     val xformed = xform(red)
-    transduceLeft(IdentityTransducer(), xformed, xformed.identity(), coll)
+    transduceLeft(IdentityTransducer[S2, I2](), xformed, xformed.identity(), coll)
   }
 
   /** Right-reduce a collection of items, with respect to the reducer's laziness.
@@ -197,7 +197,7 @@ package object transduction {
     coll: Iterable[I2]
   ): R = {
     val xformed = xform(red)
-    transduceRight(IdentityTransducer(), xformed, xformed.identity(), coll)
+    transduceRight(IdentityTransducer[S2, I2](), xformed, xformed.identity(), coll)
   }
 
   /** Captures the process of applying a left-transducer to a collection. Feed with a reducer and
@@ -222,8 +222,8 @@ package object transduction {
   def eductionLeft[S1, S2, I1, I2, R](
     xform: Transducer[S1, S2, I1, I2],
     coll: Iterable[I2]
-  ): (Reducer[S2, I2, R], R) => R =
-    transduceLeft(xform, _, _, coll)
+  ): (Reducer[S1, I1, R], R) => R =
+    transduceLeft[S1, S2, I1, I2, R](xform, _, _, coll)
 
   /** Captures the process of applying a right-transducer to a collection. Feed with a reducer and
     * initial value to get the result.
@@ -247,6 +247,6 @@ package object transduction {
   def eductionRight[S1, S2, I1, I2, R](
     xform: Transducer[S1, S2, I1, I2],
     coll: Iterable[I2]
-  ): (Reducer[S2, I2, R], R) => R =
-    transduceRight(xform, _, _, coll)
+  ): (Reducer[S1, I1, R], R) => R =
+    transduceRight[S1, S2, I1, I2, R](xform, _, _, coll)
 }

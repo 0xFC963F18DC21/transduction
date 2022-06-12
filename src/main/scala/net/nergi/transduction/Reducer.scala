@@ -12,6 +12,8 @@ package net.nergi.transduction
   * initial value and completion can be given, but if omitted, they must be provided if used in a
   * transduction process.
   *
+  * Any monoids are automatically candidates for being a reducer.
+  *
   * @tparam S
   *   Type of state used by this reducer.
   * @tparam A
@@ -19,7 +21,7 @@ package net.nergi.transduction
   * @tparam R
   *   Type of the final result being produced by this reducer.
   */
-trait Reducer[S, A, R] {
+trait Reducer[S, -A, R] {
   /** Get the current immutable state that this reducer is in.
     * @return
     *   Reducer's current state.
@@ -74,4 +76,74 @@ trait Reducer[S, A, R] {
     */
   def stepR(state: S, inp: A, acc: => R): (S, Reduction[R]) =
     stepL(state, acc, inp)
+}
+
+object Reducer {
+  /** Create a new stateless reducer.
+    * @param id
+    *   Identity of reducer.
+    * @param comp
+    *   Completion of reducer.
+    * @param sL
+    *   Left-step of reducer. Can be the flipped right-step.
+    * @param sR
+    *   Right-step of reducer. Can be the flipped left-step.
+    * @tparam A
+    *   Type of input used by reducer.
+    * @tparam R
+    *   Type of result of reducer.
+    * @return
+    *   A stateless reducer from input type to output type, using given step functions.
+    */
+  def stateless[A, R](
+    id: => R,
+    comp: R => R,
+    sL: (R, A) => Reduction[R],
+    sR: (A, R) => Reduction[R]
+  ): Reducer[Unit, A, R] =
+    new Reducer[Unit, A, R] {
+      override def state(): Unit = ()
+
+      override def identity(): R = id
+
+      override def completion(state: Unit, acc: R): R = comp(acc)
+
+      override def stepL(state: Unit, acc: => R, inp: A): (Unit, Reduction[R]) =
+        (state, sL(acc, inp))
+
+      override def stepR(state: Unit, inp: A, acc: => R): (Unit, Reduction[R]) =
+        (state, sR(inp, acc))
+    }
+
+  /** Create a stateless reducer with only a left-step. See [[stateless]] for more information.
+    */
+  def statelessL[A, R](id: => R, comp: R => R, sL: (R, A) => Reduction[R]): Reducer[Unit, A, R] =
+    stateless(id, comp, sL, (a, r) => sL(r, a))
+
+  /** Create a stateless reducer with only a right-step. See [[stateless]] for more information.
+    */
+  def statelessR[A, R](id: => R, comp: R => R, sR: (A, R) => Reduction[R]): Reducer[Unit, A, R] =
+    stateless(id, comp, (r, a) => sR(a, r), sR)
+
+  // Simple boolean reducers.
+  /** Boolean-and reducer. */
+  def AndReducer(comp: Boolean => Boolean = identity _): Reducer[Unit, Boolean, Boolean] =
+    statelessR(true, comp, (a, r) => if (!a) Reduced(false) else Continue(a && r))
+
+  /** Boolean-or reducer. */
+  def OrReducer(comp: Boolean => Boolean = identity _): Reducer[Unit, Boolean, Boolean] =
+    statelessR(false, comp, (a, r) => if (a) Reduced(true) else Continue(a || r))
+
+  /** Boolean-exclusive-or reducer. */
+  def XorReducer(comp: Boolean => Boolean = identity _): Reducer[Unit, Boolean, Boolean] =
+    statelessR(false, comp, (a, r) => Continue(a ^ r))
+
+  // Simple arithmetic reducers.
+  /** Plus / Add reducer. */
+  def AddReducer[T](comp: T => T = identity _)(implicit ev: Numeric[T]): Reducer[Unit, T, T] =
+    stateless(ev.zero, comp, (r, a) => Continue(ev.plus(r, a)), (a, r) => Continue(ev.plus(a, r)))
+
+  /** Multiply / Times reducer. */
+  def MuliplyReducer[T](comp: T => T = identity _)(implicit ev: Numeric[T]): Reducer[Unit, T, T] =
+    stateless(ev.one, comp, (r, a) => Continue(ev.times(r, a)), (a, r) => Continue(ev.times(a, r)))
 }
