@@ -8,8 +8,6 @@ package object transduction {
   /** Left-reduce a collection of items, with respect to the reducer's laziness.
     * @param red
     *   Reducer to use.
-    * @param state
-    *   Current state for the reduction.
     * @param init
     *   Initial value of the reduction.
     * @param coll
@@ -23,8 +21,15 @@ package object transduction {
     * @return
     *   The final state and reduction result of the item.
     */
+  def reduceLeft[S, A, R](red: Reducer[S, A, R], init: R, coll: Iterable[A]): R =
+    reduceL(red, red.initialState(), init, coll)._2
+
+  /** Variant of [[reduceLeft]] that does not need an identity. */
+  def reduceLeft1[S, A, R](red: Reducer[S, A, R], coll: Iterable[A]): R =
+    reduceLeft(red, red.identity(), coll)
+
   @tailrec
-  private[transduction] def reduceLeft[S, A, R](
+  private[transduction] def reduceL[S, A, R](
     red: Reducer[S, A, R],
     state: S,
     init: R,
@@ -34,7 +39,7 @@ package object transduction {
       case None    => (state, init)
       case Some(x) =>
         red.stepL(state, init, x) match {
-          case (newState, Continue(newInit)) => reduceLeft(red, newState, newInit, coll.tail)
+          case (newState, Continue(newInit)) => reduceL(red, newState, newInit, coll.tail)
           case (newState, Reduced(item))     => (newState, item)
         }
     }
@@ -69,7 +74,7 @@ package object transduction {
     coll: Iterable[I2]
   ): R = {
     val xformed = xform(red)
-    reduceLeft[S2, I2, R](xformed, xformed.initialState(), init, coll) match {
+    reduceL[S2, I2, R](xformed, xformed.initialState(), init, coll) match {
       case (state, res) => xformed.completion(state, res)
     }
   }
@@ -106,8 +111,6 @@ package object transduction {
   /** Right-reduce a collection of items, with respect to the reducer's laziness.
     * @param red
     *   Reducer to use.
-    * @param state
-    *   Current state for the reduction.
     * @param init
     *   Initial value of the reduction.
     * @param coll
@@ -121,7 +124,14 @@ package object transduction {
     * @return
     *   The new state and next intermediate item of the reduction.
     */
-  private[transduction] def reduceRight[S, A, R](
+  def reduceRight[S, A, R](red: Reducer[S, A, R], init: R, coll: Iterable[A]): R =
+    reduceR(red, red.initialState(), init, coll)._2.item
+
+  /** Variant of [[reduceRight]] that does not require an identity. */
+  def reduceRight1[S, A, R](red: Reducer[S, A, R], coll: Iterable[A]): R =
+    reduceRight(red, red.identity(), coll)
+
+  private[transduction] def reduceR[S, A, R](
     red: Reducer[S, A, R],
     state: S,
     init: R,
@@ -130,7 +140,7 @@ package object transduction {
     coll.headOption match {
       case None    => (state, Continue(init))
       case Some(x) =>
-        reduceRight(red, state, init, coll.tail) match {
+        reduceR(red, state, init, coll.tail) match {
           case (newState, Continue(result)) => red.stepR(newState, x, result)
           case (newState, Reduced(result))  => (newState, Reduced(result))
         }
@@ -166,7 +176,7 @@ package object transduction {
     coll: Iterable[I2]
   ): R = {
     val xformed = xform(red)
-    reduceRight[S2, I2, R](xformed, xformed.initialState(), init, coll) match {
+    reduceR[S2, I2, R](xformed, xformed.initialState(), init, coll) match {
       case (state, res) => xformed.completion(state, res.item)
     }
   }

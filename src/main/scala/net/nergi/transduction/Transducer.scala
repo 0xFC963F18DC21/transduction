@@ -336,9 +336,9 @@ object Transducer {
 
           bias match {
             case BiasL =>
-              reduceLeft[S, List[A], R](rf, rf.initialState(), rf.identity(), lists)._2
+              reduceLeft1[S, List[A], R](rf, lists)
             case BiasR =>
-              reduceRight[S, List[A], R](rf, rf.initialState(), rf.identity(), lists)._2.item
+              reduceRight1[S, List[A], R](rf, lists)
           }
         }
 
