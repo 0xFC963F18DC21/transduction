@@ -1,5 +1,7 @@
 package net.nergi.transduction
 
+import net.nergi.transduction.mutable.{Reducer => MutableReducer}
+
 /** A reducer object.
   *
   * Reducer objects represent three functions that work together to create an applicable object that
@@ -101,7 +103,7 @@ object Reducer {
     sL: (R, A) => Reduction[R],
     sR: (A, R) => Reduction[R]
   ): Reducer[Unit, A, R] =
-    new Reducer[Unit, A, R] {
+    new MutableReducer[A, R] {
       override def initialState(): Unit = ()
 
       override def identity(): R = id
