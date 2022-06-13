@@ -5,6 +5,8 @@ Clojure's [transducers](https://clojure.org/reference/transducers) in Scala.
 Inspired by Clojure's implementation (obviously) and [this Haskell
 implementation and theory](https://hypirion.com/musings/haskell-transducers).
 
+Documentation can be found [here](https://0xfc963f18dc21.github.io/transduction/).
+
 ## What are they?
 
 Transducers are applicable objects that transform reducers. If you've ever
