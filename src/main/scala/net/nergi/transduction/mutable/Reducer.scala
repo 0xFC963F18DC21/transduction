@@ -4,7 +4,7 @@ import net.nergi.transduction.{Reducer => ImmutableReducer}
 
 /** Explicitly mutable-state (or stateless) reducers.
   *
-  * See [[ImmutableReducer]] for more information.
+  * See [[net.nergi.transduction.Reducer]] for more information.
   *
   * @tparam A
   *   Type of item being reduced.

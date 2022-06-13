@@ -7,7 +7,7 @@ import net.nergi.transduction.{Reduced, Reducer, Reduction, Transducer => Immuta
   *
   * However, these can only modify stateless or mutable-state transducers.
   *
-  * See [[ImmutableTransducer]] for more information.
+  * See [[net.nergi.transduction.Transducer]] for more information.
   *
   * @tparam I1
   *   Old reducer's input type.
@@ -19,7 +19,7 @@ trait Transducer[I1, I2] extends ImmutableTransducer[Unit, Unit, I1, I2] {}
 object Transducer {
   /** Mapping transducer. Adapted to fit mutable transduction.
     *
-    * See [[ImmutableTransducer.MappingTransducer]] for more information.
+    * See [[net.nergi.transduction.Transducer.MappingTransducer]] for more information.
     * @param f
     *   Mapping function (ideally pure).
     * @tparam A
@@ -35,7 +35,7 @@ object Transducer {
 
   /** Filtering transducer. Adapted to fit mutable transduction.
     *
-    * See [[ImmutableTransducer.FilteringTransducer]] for more information.
+    * See [[net.nergi.transduction.Transducer.FilteringTransducer]] for more information.
     * @param p
     *   Predicate function (ideally pure).
     * @tparam A
