@@ -72,11 +72,6 @@ trait Transducer[S1, S2, +I1, -I2] {
 }
 
 object Transducer {
-  /** Direction-biased transducers need a parameter to decide their bias. */
-  sealed trait Bias
-  case object BiasL extends Bias
-  case object BiasR extends Bias
-
   /** Identity transducer. Does not transform a reducer.
     * @tparam S
     *   Type of state used by reducer.

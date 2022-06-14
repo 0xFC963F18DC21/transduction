@@ -3,6 +3,11 @@ import transduction.Transducer._
 import scala.annotation.tailrec
 
 package object transduction {
+  /** Direction-biased transducers need a parameter to decide their bias. */
+  sealed trait Bias
+  case object BiasL extends Bias
+  case object BiasR extends Bias
+
   /** Left-reduce a collection of items, with respect to the reducer's laziness.
     * @param red
     *   Reducer to use.
