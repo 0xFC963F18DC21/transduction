@@ -36,6 +36,8 @@ trait Transducer[S1, S2, +I1, -I2] {
   def apply[R](rf: Reducer[S1, I1, R]): Reducer[S2, I2, R]
 
   /** Composition operator for transducers.
+    *
+    * Note that the arrow follows the direction of data.
     * @param xf
     *   Transducer to compose with.
     * @tparam S3
@@ -45,17 +47,19 @@ trait Transducer[S1, S2, +I1, -I2] {
     * @return
     *   Composed transducer.
     */
-  def <-:[S3, I3](xf: Transducer[S2, S3, I2, I3]): Transducer[S1, S3, I1, I3] = {
+  def >-:[S3, I3](xf: Transducer[S2, S3, I2, I3]): Transducer[S1, S3, I1, I3] = {
     val old = this
     new Transducer[S1, S3, I1, I3] {
       override def apply[R](rf: Reducer[S1, I1, R]): Reducer[S3, I3, R] = xf(old(rf))
     }
   }
 
-  /** Alias for [[<-:]]. */
-  def compose[S3, I3](xf: Transducer[S2, S3, I2, I3]): Transducer[S1, S3, I1, I3] = xf <-: this
+  /** Alias for [[>-:]]. */
+  def andThen[S3, I3](xf: Transducer[S2, S3, I2, I3]): Transducer[S1, S3, I1, I3] = xf >-: this
 
   /** And-Then operator for transducers.
+    *
+    * Note that the arrow follows the direction of data.
     * @param xf
     *   Transducer to execute next.
     * @tparam S3
@@ -65,10 +69,10 @@ trait Transducer[S1, S2, +I1, -I2] {
     * @return
     *   Composed transducer.
     */
-  def :->[S3, I3](xf: Transducer[S2, S3, I2, I3]): Transducer[S1, S3, I1, I3] = xf <-: this
+  def :-<[S3, I3](xf: Transducer[S2, S3, I2, I3]): Transducer[S1, S3, I1, I3] = xf >-: this
 
-  /** Alias for [[:->]]. */
-  def andThen[S3, I3](xf: Transducer[S2, S3, I2, I3]): Transducer[S1, S3, I1, I3] = this :-> xf
+  /** Alias for [[:-<]]. */
+  def compose[S3, I3](xf: Transducer[S2, S3, I2, I3]): Transducer[S1, S3, I1, I3] = this :-< xf
 }
 
 object Transducer {

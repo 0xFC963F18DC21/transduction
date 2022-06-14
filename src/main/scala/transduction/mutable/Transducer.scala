@@ -133,16 +133,16 @@ object Transducer {
     * across different threads!
     * @param categoriser
     *   Key-generating function for the internal categoriser.
-    * @tparam A
-    *   Input type of reducer.
     * @tparam K
     *   Desired categorising type.
+    * @tparam A
+    *   Input type of reducer.
     */
-  case class CategorisingMTransducer[A, K](categoriser: A => K, bias: Bias = BiasL)
+  case class CategorisingMTransducer[K, A](categoriser: A => K, bias: Bias = BiasL)
     extends Transducer[List[A], A] {
     override def apply[R](rf: Reducer[Unit, List[A], R]): Reducer[Unit, A, R] = {
       new Reducer[Unit, A, R] {
-        private val Partitions: mutable.Map[K, List[A]] = new mutable.HashMap()
+        private val Partitions: mutable.Map[K, List[A]] = new mutable.LinkedHashMap()
 
         override def initialState(): Unit = rf.initialState()
 
