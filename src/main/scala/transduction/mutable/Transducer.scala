@@ -149,14 +149,14 @@ object Transducer {
         override def identity(): R = rf.identity()
 
         override def completion(state: Unit, acc: R): R = {
-          val lists = Partitions.map { case (_, l) => l.reverse }.toList
+          val lists = Partitions.map { case (_, l) => if (bias == BiasL) l.reverse else l }.toList
           Partitions.clear()
 
           bias match {
             case BiasL =>
               reduceLeft1[Unit, List[A], R](rf, lists)
             case BiasR =>
-              reduceRight1[Unit, List[A], R](rf, lists)
+              reduceRight1[Unit, List[A], R](rf, lists.reverse)
           }
         }
 
